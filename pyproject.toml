@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dbt-guard"
-version = "0.1.0"
+version = "0.1.1"
 description = "Column-level lineage breaking change detection for dbt Core CI pipelines"
 readme = "README.md"
 license = { file = "LICENSE" }
