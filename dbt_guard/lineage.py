@@ -26,6 +26,7 @@ from typing import Dict, List, Optional
 
 import sqlglot
 import sqlglot.expressions as exp
+from sqlglot.expressions import Expression
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +68,14 @@ def extract_columns_from_sql(
     if statement is None:
         return None
 
+    # parse_one returns Expr; cast to Expression so helpers are happy with mypy
+    stmt: Expression = statement  # type: ignore[assignment]
+
     # Build the CTE lookup from whatever top-level node sqlglot returned
-    cte_lookup: Dict[str, exp.Expression] = _build_cte_lookup(statement)
+    cte_lookup: Dict[str, exp.Expression] = _build_cte_lookup(stmt)
 
     # Locate the outermost SELECT
-    outer_select = _find_outermost_select(statement)
+    outer_select = _find_outermost_select(stmt)
     if outer_select is None:
         logger.debug("No SELECT found in statement type=%s", type(statement).__name__)
         return None
@@ -152,7 +156,7 @@ def _find_outermost_select(statement: exp.Expression) -> Optional[exp.Select]:
             return inner
         return _find_outermost_select(inner)
     # Try to find any Select as a fallback
-    return statement.find(exp.Select)  # type: ignore[return-value]
+    return statement.find(exp.Select)
 
 
 def _extract_from_select(
