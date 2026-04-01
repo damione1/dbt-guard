@@ -39,8 +39,8 @@ dev = [
 dbt-guard = "dbt_guard.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/dbt-guard/dbt-guard"
-Issues = "https://github.com/dbt-guard/dbt-guard/issues"
+Homepage = "https://github.com/damione1/dbt-guard"
+Issues = "https://github.com/damione1/dbt-guard/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["dbt_guard"]
