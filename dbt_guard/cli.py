@@ -10,12 +10,12 @@ from typing import Optional, Tuple
 import click
 
 from . import __version__
+from .differ import diff_models
 from .exceptions import DbtGuardError
 from .impact import find_impacted_models
 from .lineage import extract_columns_from_sql
 from .manifest import load_manifest
-from .models import ColumnInfo, DiffReport, ModelColumns
-from .differ import diff_models
+from .models import ColumnInfo, DiffReport
 from .reporter import format_report
 
 logger = logging.getLogger(__name__)

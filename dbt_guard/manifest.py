@@ -43,7 +43,6 @@ def load_manifest(
         raise ManifestParseError(f"Invalid JSON in {manifest_path}: {exc}") from exc
 
     nodes: dict = data.get("nodes", {})
-    sources: dict = data.get("sources", {})
     raw_child_map: dict = data.get("child_map", {})
 
     models: Dict[str, ModelColumns] = {}
