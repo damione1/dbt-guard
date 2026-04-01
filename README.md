@@ -1,5 +1,9 @@
 # dbt-guard
 
+[![PyPI](https://img.shields.io/pypi/v/dbt-guard)](https://pypi.org/project/dbt-guard/)
+[![CI](https://github.com/damione1/dbt-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/damione1/dbt-guard/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
 Column-level lineage breaking change detection for dbt Core CI pipelines.
 
 dbt-guard detects when a model's output columns change in a way that would break downstream consumers — before the code reaches production. It works by comparing two `manifest.json` files (the base branch vs. the PR branch) using static analysis only: no database connection required.
