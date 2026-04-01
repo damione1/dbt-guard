@@ -1,0 +1,120 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12/manifest.json",
+    "dbt_version": "1.9.0",
+    "generated_at": "2025-01-02T00:00:00Z",
+    "invocation_id": "aaaaaaaa-0000-0000-0000-000000000002",
+    "env": {}
+  },
+  "nodes": {
+    "model.test_pkg.model_a": {
+      "unique_id": "model.test_pkg.model_a",
+      "name": "model_a",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_a.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {
+        "nodes": []
+      },
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "name": {"name": "name", "data_type": "varchar", "description": "User name"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"},
+        "created_at": {"name": "created_at", "data_type": "timestamp", "description": "Record creation timestamp"}
+      },
+      "description": "Base model A — email removed, created_at added",
+      "tags": []
+    },
+    "model.test_pkg.model_b": {
+      "unique_id": "model.test_pkg.model_b",
+      "name": "model_b",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_b.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {
+        "nodes": ["model.test_pkg.model_a"]
+      },
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "user_name": {"name": "user_name", "data_type": "varchar", "description": "Joined user name"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"}
+      },
+      "description": "Model B depending on model A",
+      "tags": []
+    },
+    "model.test_pkg.model_c": {
+      "unique_id": "model.test_pkg.model_c",
+      "name": "model_c",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_c.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {
+        "nodes": ["model.test_pkg.model_b"]
+      },
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "user_name": {"name": "user_name", "data_type": "varchar", "description": "Propagated user name"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"}
+      },
+      "description": "Model C depending on model B (distance 2 from model A)",
+      "tags": []
+    },
+    "model.test_pkg.model_d": {
+      "unique_id": "model.test_pkg.model_d",
+      "name": "model_d",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_d.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {
+        "nodes": []
+      },
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "value": {"name": "value", "data_type": "numeric", "description": "Some value"}
+      },
+      "description": "Independent model D",
+      "tags": []
+    },
+    "test.test_pkg.not_null_model_a_id.abc123": {
+      "unique_id": "test.test_pkg.not_null_model_a_id.abc123",
+      "name": "not_null_model_a_id",
+      "resource_type": "test",
+      "package_name": "test_pkg",
+      "original_file_path": "models/schema.yml",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {
+        "nodes": ["model.test_pkg.model_a"]
+      },
+      "columns": {},
+      "description": "",
+      "tags": []
+    }
+  },
+  "sources": {},
+  "child_map": {
+    "model.test_pkg.model_a": [
+      "model.test_pkg.model_b",
+      "test.test_pkg.not_null_model_a_id.abc123"
+    ],
+    "model.test_pkg.model_b": [
+      "model.test_pkg.model_c"
+    ],
+    "model.test_pkg.model_c": [],
+    "model.test_pkg.model_d": []
+  },
+  "parent_map": {
+    "model.test_pkg.model_a": [],
+    "model.test_pkg.model_b": ["model.test_pkg.model_a"],
+    "model.test_pkg.model_c": ["model.test_pkg.model_b"],
+    "model.test_pkg.model_d": []
+  }
+}

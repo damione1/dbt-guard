@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run ruff lint
+        run: ruff check dbt_guard/
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: Upload coverage report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
+
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: mypy dbt_guard/
+
+  # Example job showing how to use dbt-guard in a real dbt CI workflow
+  # This is for documentation purposes — adapt for your own dbt repo.
+  # dbt-guard-example:
+  #   name: Column lineage check (example)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
+  #
+  #     - name: Install dbt-guard
+  #       run: pip install dbt-guard
+  #
+  #     - name: Generate base manifest (from main branch)
+  #       run: |
+  #         git stash
+  #         dbt parse --target ci --profiles-dir .
+  #         mkdir -p /tmp/base_target
+  #         cp target/manifest.json /tmp/base_target/
+  #         git stash pop
+  #
+  #     - name: Generate current manifest (from PR branch)
+  #       run: dbt parse --target ci --profiles-dir .
+  #
+  #     - name: Run column lineage check
+  #       run: |
+  #         dbt-guard diff \
+  #           --base /tmp/base_target \
+  #           --current target/ \
+  #           --dialect snowflake \
+  #           --format github
