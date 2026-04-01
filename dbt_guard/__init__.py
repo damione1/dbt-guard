@@ -1,3 +1,3 @@
 """dbt-guard: column-level lineage breaking change detection for dbt Core CI pipelines."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
