@@ -20,11 +20,12 @@ class ModelColumns:
 
     model_id: str       # unique_id: "model.alesco.DT_PAYMENTS"
     model_name: str     # short name: "DT_PAYMENTS"
+    resource_type: str = "model"  # "model", "seed", "source", "snapshot"
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)  # keyed by lowercase name
     has_compiled_sql: bool = False
     # Compiled SQL text, stored separately to keep repr clean.
     # Populated by manifest.py when the compiled file exists on disk.
-    _compiled_sql: Optional[str] = field(default=None, repr=False, compare=False)
+    compiled_sql: Optional[str] = field(default=None, repr=False, compare=False)
 
 
 @dataclass
@@ -50,6 +51,61 @@ class ImpactedModel:
 
 
 @dataclass
+class ExposureInfo:
+    """Metadata for a dbt exposure (dashboard, notebook, etc.)."""
+
+    exposure_id: str
+    name: str
+    type: str  # "dashboard", "notebook", etc.
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    url: Optional[str] = None
+    depends_on_nodes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ImpactedExposure:
+    """An exposure affected by breaking changes in its upstream models."""
+
+    exposure_id: str
+    name: str
+    type: str
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    url: Optional[str] = None
+    impacted_models: List[str] = field(default_factory=list)  # model names
+    impacted_columns: Dict[str, List[str]] = field(default_factory=dict)  # model_name -> [col_names]
+
+
+@dataclass
+class ColumnLineageLink:
+    """A single node in a column-level lineage chain."""
+
+    model_id: str
+    model_name: str
+    column_name: str
+
+
+@dataclass
+class ImpactedColumn:
+    """A column in a downstream model affected by an upstream change."""
+
+    column_name: str
+    reason: str  # e.g. "references removed column X from model Y"
+    chain: List[ColumnLineageLink] = field(default_factory=list)
+
+
+@dataclass
+class ColumnLineageImpact:
+    """Column-level lineage impact for a single downstream model."""
+
+    model_id: str
+    model_name: str
+    impacted_columns: List[ImpactedColumn] = field(default_factory=list)
+    cleared: bool = False  # True = column lineage proved no impact
+
+
+@dataclass
 class DiffReport:
     """Full output of a dbt-guard diff run."""
 
@@ -58,11 +114,19 @@ class DiffReport:
     breaking_changes: List[ColumnChange] = field(default_factory=list)
     non_breaking_changes: List[ColumnChange] = field(default_factory=list)
     impacted_models: List[ImpactedModel] = field(default_factory=list)
+    # Optional fields — default to empty when not requested via CLI flags
+    source_changes: List[ColumnChange] = field(default_factory=list)
+    column_lineage_impacts: List[ColumnLineageImpact] = field(default_factory=list)
+    cleared_models: List[str] = field(default_factory=list)
+    impacted_exposures: List[ImpactedExposure] = field(default_factory=list)
+    undocumented_sources: List[str] = field(default_factory=list)
 
     @property
     def has_breaking_changes(self) -> bool:
-        return len(self.breaking_changes) > 0
+        return len(self.breaking_changes) > 0 or any(
+            c.is_breaking for c in self.source_changes
+        )
 
     @property
     def total_changes(self) -> int:
-        return len(self.breaking_changes) + len(self.non_breaking_changes)
+        return len(self.breaking_changes) + len(self.non_breaking_changes) + len(self.source_changes)

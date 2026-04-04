@@ -1,0 +1,158 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12/manifest.json",
+    "dbt_version": "1.9.0",
+    "generated_at": "2025-01-02T00:00:00Z",
+    "invocation_id": "bbbbbbbb-0000-0000-0000-000000000002",
+    "env": {}
+  },
+  "nodes": {
+    "model.test_pkg.model_a": {
+      "unique_id": "model.test_pkg.model_a",
+      "name": "model_a",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_a.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {"nodes": ["source.test_pkg.raw_db.users"]},
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "name": {"name": "name", "data_type": "varchar", "description": "User name"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"},
+        "created_at": {"name": "created_at", "data_type": "timestamp", "description": "Created timestamp"}
+      },
+      "description": "Base model A — email removed, created_at added",
+      "tags": []
+    },
+    "model.test_pkg.model_b": {
+      "unique_id": "model.test_pkg.model_b",
+      "name": "model_b",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_b.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {"nodes": ["model.test_pkg.model_a"]},
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "user_name": {"name": "user_name", "data_type": "varchar", "description": "Joined user name"},
+        "email": {"name": "email", "data_type": "varchar", "description": "User email from model_a"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"}
+      },
+      "description": "Model B depending on model A — references email column",
+      "tags": []
+    },
+    "model.test_pkg.model_c": {
+      "unique_id": "model.test_pkg.model_c",
+      "name": "model_c",
+      "resource_type": "model",
+      "package_name": "test_pkg",
+      "original_file_path": "models/model_c.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {"nodes": ["model.test_pkg.model_a"]},
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Record status"}
+      },
+      "description": "Model C depending on model A — does NOT reference email column",
+      "tags": []
+    },
+    "snapshot.test_pkg.snap_users": {
+      "unique_id": "snapshot.test_pkg.snap_users",
+      "name": "snap_users",
+      "resource_type": "snapshot",
+      "package_name": "test_pkg",
+      "original_file_path": "snapshots/snap_users.sql",
+      "compiled_path": null,
+      "compiled_code": "",
+      "depends_on": {"nodes": ["model.test_pkg.model_a"]},
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "name": {"name": "name", "data_type": "varchar", "description": "User name"},
+        "dbt_valid_from": {"name": "dbt_valid_from", "data_type": "timestamp", "description": "SCD valid from"}
+      },
+      "description": "Snapshot of model A",
+      "tags": []
+    }
+  },
+  "sources": {
+    "source.test_pkg.raw_db.users": {
+      "unique_id": "source.test_pkg.raw_db.users",
+      "name": "users",
+      "resource_type": "source",
+      "source_name": "raw_db",
+      "source_description": "Raw database",
+      "depends_on": {"nodes": []},
+      "columns": {
+        "id": {"name": "id", "data_type": "integer", "description": "Primary key"},
+        "name": {"name": "name", "data_type": "varchar", "description": "User name"},
+        "status": {"name": "status", "data_type": "varchar", "description": "Account status"}
+      },
+      "description": "Raw users table — email column removed",
+      "tags": []
+    },
+    "source.test_pkg.raw_db.orders": {
+      "unique_id": "source.test_pkg.raw_db.orders",
+      "name": "orders",
+      "resource_type": "source",
+      "source_name": "raw_db",
+      "source_description": "Raw database",
+      "depends_on": {"nodes": []},
+      "columns": {},
+      "description": "Raw orders table — still no documented columns",
+      "tags": []
+    }
+  },
+  "exposures": {
+    "exposure.test_pkg.user_dashboard": {
+      "unique_id": "exposure.test_pkg.user_dashboard",
+      "name": "user_dashboard",
+      "type": "dashboard",
+      "owner": {
+        "name": "Alice Smith",
+        "email": "alice@example.com"
+      },
+      "url": "https://bi.example.com/dashboards/users",
+      "depends_on": {
+        "nodes": ["model.test_pkg.model_a", "model.test_pkg.model_b"]
+      },
+      "description": "User metrics dashboard"
+    },
+    "exposure.test_pkg.stable_report": {
+      "unique_id": "exposure.test_pkg.stable_report",
+      "name": "stable_report",
+      "type": "notebook",
+      "owner": {
+        "name": "Bob Jones",
+        "email": "bob@example.com"
+      },
+      "url": null,
+      "depends_on": {
+        "nodes": ["model.test_pkg.model_c"]
+      },
+      "description": "Stable report depending only on model_c"
+    }
+  },
+  "child_map": {
+    "source.test_pkg.raw_db.users": [
+      "model.test_pkg.model_a"
+    ],
+    "model.test_pkg.model_a": [
+      "model.test_pkg.model_b",
+      "model.test_pkg.model_c",
+      "snapshot.test_pkg.snap_users"
+    ],
+    "model.test_pkg.model_b": [],
+    "model.test_pkg.model_c": [],
+    "snapshot.test_pkg.snap_users": []
+  },
+  "parent_map": {
+    "source.test_pkg.raw_db.users": [],
+    "model.test_pkg.model_a": ["source.test_pkg.raw_db.users"],
+    "model.test_pkg.model_b": ["model.test_pkg.model_a"],
+    "model.test_pkg.model_c": ["model.test_pkg.model_a"],
+    "snapshot.test_pkg.snap_users": ["model.test_pkg.model_a"]
+  }
+}

@@ -207,8 +207,8 @@ class TestDiffModels:
     def test_fixture_manifests(self, base_manifest_dir, current_manifest_dir) -> None:
         from dbt_guard.manifest import load_manifest
 
-        base_models, _ = load_manifest(base_manifest_dir)
-        current_models, _ = load_manifest(current_manifest_dir)
+        base_models = load_manifest(base_manifest_dir).models
+        current_models = load_manifest(current_manifest_dir).models
         changes = diff_models(base_models, current_models)
 
         # model_a: email removed (breaking) + created_at added (non-breaking)
