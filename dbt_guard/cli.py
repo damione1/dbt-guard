@@ -12,11 +12,12 @@ import click
 from . import __version__
 from .differ import diff_models
 from .exceptions import DbtGuardError
-from .impact import find_impacted_models
+from .impact import find_impacted_exposures, find_impacted_models
 from .lineage import extract_columns_from_sql
 from .manifest import load_manifest
 from .models import ColumnInfo, DiffReport
 from .reporter import format_report
+from .resolver import resolve_column_lineage
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,43 @@ def main(ctx: click.Context, debug: bool) -> None:
     default=False,
     help="Print only a one-line summary instead of the full report.",
 )
+# v0.2 flags — all opt-in, default behavior unchanged
+@click.option(
+    "--include-sources",
+    is_flag=True,
+    default=False,
+    help="Include dbt sources in the diff analysis.",
+)
+@click.option(
+    "--include-exposures",
+    is_flag=True,
+    default=False,
+    help="Include dbt exposures in impact analysis.",
+)
+@click.option(
+    "--include-snapshots",
+    is_flag=True,
+    default=False,
+    help="Include dbt snapshots in the diff analysis.",
+)
+@click.option(
+    "--column-lineage",
+    is_flag=True,
+    default=False,
+    help="Enable column-level lineage resolution to reduce false positives.",
+)
+@click.option(
+    "--strict-lineage",
+    is_flag=True,
+    default=False,
+    help="Fail if compiled SQL is missing for any impacted model (requires --column-lineage).",
+)
+@click.option(
+    "--warn-undocumented-sources",
+    is_flag=True,
+    default=False,
+    help="Warn about sources with no documented columns.",
+)
 def diff(
     base: Path,
     current: Path,
@@ -121,14 +159,40 @@ def diff(
     output: Optional[Path],
     select_models: Tuple[str, ...],
     quiet: bool,
+    include_sources: bool,
+    include_exposures: bool,
+    include_snapshots: bool,
+    column_lineage: bool,
+    strict_lineage: bool,
+    warn_undocumented_sources: bool,
 ) -> None:
     """Diff column-level lineage between two dbt manifest states."""
     try:
+        # Validate flag combinations
+        if strict_lineage and not column_lineage:
+            raise click.UsageError("--strict-lineage requires --column-lineage")
+
         sql_dialect = None if dialect == "default" else dialect
 
         # Load both manifests
-        base_models, _base_child_map = load_manifest(base)
-        current_models, curr_child_map = load_manifest(current)
+        base_data = load_manifest(
+            base,
+            include_sources=include_sources,
+            include_snapshots=include_snapshots,
+            include_exposures=include_exposures,
+            warn_undocumented_sources=warn_undocumented_sources,
+        )
+        current_data = load_manifest(
+            current,
+            include_sources=include_sources,
+            include_snapshots=include_snapshots,
+            include_exposures=include_exposures,
+            warn_undocumented_sources=warn_undocumented_sources,
+        )
+
+        base_models = base_data.models
+        current_models = current_data.models
+        curr_child_map = current_data.child_map
 
         # Enrich column lists from compiled SQL where available
         _enrich_from_sql(base_models, sql_dialect)
@@ -142,10 +206,15 @@ def diff(
                 k: v for k, v in current_models.items() if v.model_name in select_set
             }
 
-        # Compute column diff
+        # Compute column diff for models
         all_changes = diff_models(base_models, current_models)
         breaking = [c for c in all_changes if c.is_breaking]
         non_breaking = [c for c in all_changes if not c.is_breaking]
+
+        # Compute source diff
+        source_changes = []
+        if include_sources:
+            source_changes = diff_models(base_data.sources, current_data.sources)
 
         # Downstream impact analysis
         impacted = []
@@ -153,12 +222,59 @@ def diff(
             changed_ids = list({c.model_id for c in breaking})
             impacted = find_impacted_models(changed_ids, curr_child_map, max_depth)
 
+        # Column-level lineage resolution
+        column_lineage_impacts: list = []
+        cleared_models: list = []
+        if column_lineage and breaking:
+            changed_cols: dict = {}
+            for c in breaking:
+                changed_cols.setdefault(c.model_id, set()).add(c.column_name)
+
+            column_lineage_impacts, cleared_ids = resolve_column_lineage(
+                changed_columns=changed_cols,
+                child_map=curr_child_map,
+                all_models=current_data.models,
+                dialect=sql_dialect,
+                max_depth=max_depth,
+                strict=strict_lineage,
+            )
+
+            # Remove cleared models from impacted list
+            cleared_set = set(cleared_ids)
+            cleared_models = [
+                m.model_name for m in impacted if m.model_id in cleared_set
+            ]
+            impacted = [m for m in impacted if m.model_id not in cleared_set]
+
+        # Exposure impact analysis
+        impacted_exposures = []
+        if include_exposures and current_data.exposures:
+            impacted_model_ids = {m.model_id for m in impacted}
+            changed_model_ids = {c.model_id for c in breaking}
+            impacted_exposures = find_impacted_exposures(
+                impacted_model_ids=impacted_model_ids,
+                changed_model_ids=changed_model_ids,
+                exposures=current_data.exposures,
+                breaking_changes=breaking,
+                column_lineage_impacts=column_lineage_impacts or None,
+            )
+
+        # Undocumented sources (merge from both manifests)
+        undocumented = sorted(
+            set(base_data.undocumented_sources) | set(current_data.undocumented_sources)
+        )
+
         report = DiffReport(
             base_path=str(base),
             current_path=str(current),
             breaking_changes=breaking,
             non_breaking_changes=non_breaking,
             impacted_models=impacted,
+            source_changes=source_changes,
+            column_lineage_impacts=column_lineage_impacts,
+            cleared_models=cleared_models,
+            impacted_exposures=impacted_exposures,
+            undocumented_sources=undocumented,
         )
 
         formatted = format_report(report, fmt)

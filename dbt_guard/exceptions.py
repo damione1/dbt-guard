@@ -15,3 +15,7 @@ class ManifestParseError(DbtGuardError):
 
 class LineageExtractionError(DbtGuardError):
     """Raised when compiled SQL cannot be parsed for column extraction."""
+
+
+class ColumnLineageError(DbtGuardError):
+    """Raised when column-level lineage resolution fails in strict mode."""

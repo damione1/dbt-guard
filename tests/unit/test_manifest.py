@@ -14,37 +14,38 @@ from dbt_guard.models import ColumnInfo, ModelColumns
 
 class TestLoadManifest:
     def test_loads_valid_manifest(self, base_manifest_dir: Path) -> None:
-        models, child_map = load_manifest(base_manifest_dir)
+        data = load_manifest(base_manifest_dir)
+        models, child_map = data.models, data.child_map
         assert len(models) == 4  # model_a, model_b, model_c, model_d
         assert "model.test_pkg.model_a" in models
 
     def test_returns_model_columns_type(self, base_manifest_dir: Path) -> None:
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         model_a = models["model.test_pkg.model_a"]
         assert isinstance(model_a, ModelColumns)
         assert model_a.model_id == "model.test_pkg.model_a"
         assert model_a.model_name == "model_a"
 
     def test_columns_loaded_correctly(self, base_manifest_dir: Path) -> None:
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         model_a = models["model.test_pkg.model_a"]
         # Should have id, name, email, status
         assert set(model_a.columns.keys()) == {"id", "name", "email", "status"}
 
     def test_column_names_are_lowercased(self, base_manifest_dir: Path) -> None:
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         model_a = models["model.test_pkg.model_a"]
         for col_name in model_a.columns:
             assert col_name == col_name.lower()
 
     def test_column_data_types_preserved(self, base_manifest_dir: Path) -> None:
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         model_a = models["model.test_pkg.model_a"]
         assert model_a.columns["id"].data_type == "integer"
         assert model_a.columns["email"].data_type == "varchar"
 
     def test_child_map_excludes_test_nodes(self, base_manifest_dir: Path) -> None:
-        _, child_map = load_manifest(base_manifest_dir)
+        child_map = load_manifest(base_manifest_dir).child_map
         # model_a's child_map should contain model_b but NOT the test node
         children = child_map.get("model.test_pkg.model_a", [])
         assert "model.test_pkg.model_b" in children
@@ -54,12 +55,12 @@ class TestLoadManifest:
             )
 
     def test_child_map_structure(self, base_manifest_dir: Path) -> None:
-        _, child_map = load_manifest(base_manifest_dir)
+        child_map = load_manifest(base_manifest_dir).child_map
         assert "model.test_pkg.model_b" in child_map.get("model.test_pkg.model_a", [])
         assert "model.test_pkg.model_c" in child_map.get("model.test_pkg.model_b", [])
 
     def test_independent_model_has_no_children(self, base_manifest_dir: Path) -> None:
-        _, child_map = load_manifest(base_manifest_dir)
+        child_map = load_manifest(base_manifest_dir).child_map
         # model_d is independent and has no model children
         assert child_map.get("model.test_pkg.model_d", []) == []
 
@@ -73,7 +74,7 @@ class TestLoadManifest:
             load_manifest(tmp_path)
 
     def test_test_nodes_excluded_from_models(self, base_manifest_dir: Path) -> None:
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         for uid in models:
             assert not uid.startswith("test."), (
                 f"Test node {uid!r} should not appear in models dict"
@@ -81,7 +82,7 @@ class TestLoadManifest:
 
     def test_no_compiled_sql_without_files(self, base_manifest_dir: Path) -> None:
         """Compiled SQL should be None when no compiled/ directory exists."""
-        models, _ = load_manifest(base_manifest_dir)
+        models = load_manifest(base_manifest_dir).models
         for model in models.values():
             # No compiled/ directory in fixtures, so SQL should be absent
             assert model._compiled_sql is None
@@ -110,7 +111,7 @@ class TestLoadManifest:
             "parent_map": {},
         }
         (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        models, _ = load_manifest(tmp_path)
+        models = load_manifest(tmp_path).models
         assert models["model.pkg.empty"].columns == {}
 
     def test_data_type_none_when_empty_string(self, tmp_path: Path) -> None:
@@ -136,5 +137,5 @@ class TestLoadManifest:
             "parent_map": {},
         }
         (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        models, _ = load_manifest(tmp_path)
+        models = load_manifest(tmp_path).models
         assert models["model.pkg.m"].columns["id"].data_type is None
