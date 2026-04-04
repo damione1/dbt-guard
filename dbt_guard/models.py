@@ -25,7 +25,7 @@ class ModelColumns:
     has_compiled_sql: bool = False
     # Compiled SQL text, stored separately to keep repr clean.
     # Populated by manifest.py when the compiled file exists on disk.
-    _compiled_sql: Optional[str] = field(default=None, repr=False, compare=False)
+    compiled_sql: Optional[str] = field(default=None, repr=False, compare=False)
 
 
 @dataclass
@@ -114,7 +114,7 @@ class DiffReport:
     breaking_changes: List[ColumnChange] = field(default_factory=list)
     non_breaking_changes: List[ColumnChange] = field(default_factory=list)
     impacted_models: List[ImpactedModel] = field(default_factory=list)
-    # v0.2 fields — all default to empty for backward compatibility
+    # Optional fields — default to empty when not requested via CLI flags
     source_changes: List[ColumnChange] = field(default_factory=list)
     column_lineage_impacts: List[ColumnLineageImpact] = field(default_factory=list)
     cleared_models: List[str] = field(default_factory=list)
@@ -129,4 +129,4 @@ class DiffReport:
 
     @property
     def total_changes(self) -> int:
-        return len(self.breaking_changes) + len(self.non_breaking_changes)
+        return len(self.breaking_changes) + len(self.non_breaking_changes) + len(self.source_changes)

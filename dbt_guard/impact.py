@@ -11,6 +11,7 @@ from .models import (
     ExposureInfo,
     ImpactedExposure,
     ImpactedModel,
+    ModelColumns,
 )
 
 
@@ -18,6 +19,7 @@ def find_impacted_models(
     changed_model_ids: List[str],
     child_map: Dict[str, List[str]],
     max_depth: int = 10,
+    all_models: Optional[Dict[str, "ModelColumns"]] = None,
 ) -> List[ImpactedModel]:
     """Return all downstream models reachable from *changed_model_ids*.
 
@@ -62,10 +64,15 @@ def find_impacted_models(
                 visited[child_id] = depth + 1
                 queue.append((child_id, depth + 1))
 
+    def _model_name(mid: str) -> str:
+        if all_models and mid in all_models:
+            return all_models[mid].model_name
+        return mid.split(".")[-1]
+
     return [
         ImpactedModel(
             model_id=mid,
-            model_name=mid.split(".")[-1],
+            model_name=_model_name(mid),
             distance=dist,
         )
         for mid, dist in sorted(visited.items(), key=lambda kv: (kv[1], kv[0]))
@@ -78,6 +85,7 @@ def find_impacted_exposures(
     exposures: Dict[str, ExposureInfo],
     breaking_changes: Optional[List[ColumnChange]] = None,
     column_lineage_impacts: Optional[List[ColumnLineageImpact]] = None,
+    all_models: Optional[Dict[str, ModelColumns]] = None,
 ) -> List[ImpactedExposure]:
     """Find exposures affected by breaking changes in their upstream models.
 
@@ -91,7 +99,10 @@ def find_impacted_exposures(
     # Build lookup: model_id -> model_name
     id_to_name: Dict[str, str] = {}
     for mid in all_affected:
-        id_to_name[mid] = mid.split(".")[-1]
+        if all_models and mid in all_models:
+            id_to_name[mid] = all_models[mid].model_name
+        else:
+            id_to_name[mid] = mid.split(".")[-1]
 
     # Build lookup: model_id -> list of breaking column names
     breaking_cols_by_model: Dict[str, List[str]] = {}

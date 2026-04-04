@@ -206,7 +206,7 @@ class TestRealisticE2E:
     def test_default_flags_detects_breaking(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """Without v0.2 flags, detect the phone column removal as breaking."""
+        """Default flags detect the phone column removal as breaking."""
         base = tmp_path / "base"
         current = tmp_path / "current"
         _write_manifest(base, BASE_MANIFEST)
@@ -317,7 +317,7 @@ class TestRealisticE2E:
     def test_full_pipeline_all_flags(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """Full pipeline with all v0.2 flags — everything works together."""
+        """Full pipeline with all flags — everything works together."""
         base = tmp_path / "base"
         current = tmp_path / "current"
         _write_manifest(base, BASE_MANIFEST)

@@ -130,7 +130,7 @@ def _parse_node(
         resource_type=node.get("resource_type", "model"),
         columns=cols,
         has_compiled_sql=compiled_sql is not None,
-        _compiled_sql=compiled_sql,
+        compiled_sql=compiled_sql,
     )
 
 

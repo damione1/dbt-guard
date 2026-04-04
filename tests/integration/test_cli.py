@@ -13,6 +13,8 @@ from dbt_guard.cli import main
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 BASE_DIR = FIXTURES_DIR / "manifests" / "base"
 CURRENT_DIR = FIXTURES_DIR / "manifests" / "current"
+FULL_BASE = FIXTURES_DIR / "manifests" / "full" / "base"
+FULL_CURRENT = FIXTURES_DIR / "manifests" / "full" / "current"
 
 
 @pytest.fixture()
@@ -179,7 +181,6 @@ class TestFailOn:
         assert result.exit_code == 1
 
     def test_fail_on_any_exits_one_with_non_breaking(self, runner: CliRunner) -> None:
-        # There are non-breaking changes (created_at added), so --fail-on any = 1
         result = runner.invoke(
             main,
             [
@@ -194,7 +195,6 @@ class TestFailOn:
     def test_identical_manifests_fail_on_breaking_exits_zero(
         self, runner: CliRunner
     ) -> None:
-        # Diffing base against itself → no changes
         result = runner.invoke(
             main,
             [
@@ -265,7 +265,6 @@ class TestMissingManifest:
                 "--current", str(CURRENT_DIR),
             ],
         )
-        # Error is printed to stderr
         assert "Error" in (result.output + (result.output or ""))
 
 
@@ -287,7 +286,6 @@ class TestSelectFilter:
             ],
         )
         parsed = json.loads(result.output)
-        # model_d has no changes
         assert parsed["has_breaking_changes"] is False
 
     def test_select_model_a_finds_changes(self, runner: CliRunner) -> None:
@@ -321,7 +319,7 @@ class TestQuiet:
                 "--quiet",
             ],
         )
-        lines = [l for l in result.output.strip().splitlines() if l.strip()]
+        lines = [l for l in result.output.strip().splitlines() if l.strip()]  # noqa: E741
         assert len(lines) == 1
 
     def test_quiet_line_contains_status(self, runner: CliRunner) -> None:
@@ -345,7 +343,7 @@ class TestQuiet:
 class TestOutputFile:
     def test_output_written_to_file(self, runner: CliRunner, tmp_path: Path) -> None:
         out_file = tmp_path / "report.txt"
-        result = runner.invoke(
+        runner.invoke(
             main,
             [
                 "diff",
@@ -373,3 +371,265 @@ class TestOutputFile:
         content = out_file.read_text(encoding="utf-8")
         parsed = json.loads(content)
         assert "breaking_changes" in parsed
+
+
+# ---------------------------------------------------------------------------
+# Default flags on full fixtures (sources/exposures/snapshots excluded)
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultFlagsFullFixtures:
+    def test_default_invocation_excludes_optional_features(self, runner: CliRunner) -> None:
+        """Default invocation on full fixtures ignores sources/exposures/snapshots."""
+        result = runner.invoke(
+            main,
+            ["diff", "--base", str(FULL_BASE), "--current", str(FULL_CURRENT)],
+        )
+        assert result.exit_code == 1
+        assert "SOURCE CHANGES" not in result.output
+        assert "EXPOSURE IMPACT" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# --include-sources
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeSources:
+    def test_source_changes_in_text(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+            ],
+        )
+        assert "SOURCE CHANGES" in result.output
+        assert "email" in result.output
+
+    def test_source_changes_in_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        assert parsed["summary"]["sources_changed"] >= 1
+        source_cols = [c["column"] for c in parsed["source_changes"]]
+        assert "email" in source_cols
+
+
+# ---------------------------------------------------------------------------
+# --include-exposures
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeExposures:
+    def test_exposure_impact_in_text(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-exposures",
+            ],
+        )
+        assert "EXPOSURE IMPACT" in result.output
+        assert "user_dashboard" in result.output
+
+    def test_exposure_impact_in_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-exposures",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        assert parsed["summary"]["exposures_impacted"] >= 1
+        exp_names = [e["name"] for e in parsed["exposure_impact"]]
+        assert "user_dashboard" in exp_names
+
+
+# ---------------------------------------------------------------------------
+# --include-snapshots
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeSnapshots:
+    def test_snapshot_included_in_diff(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-snapshots",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        model_ids = [c["model_id"] for c in parsed["breaking_changes"]]
+        assert "model.test_pkg.model_a" in model_ids
+
+
+# ---------------------------------------------------------------------------
+# --column-lineage
+# ---------------------------------------------------------------------------
+
+
+class TestColumnLineage:
+    def test_column_lineage_in_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--column-lineage",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        assert "column_lineage_impact" in parsed
+        assert isinstance(parsed["column_lineage_impact"], list)
+
+    def test_strict_lineage_requires_column_lineage(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--strict-lineage",
+            ],
+        )
+        assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# --warn-undocumented-sources
+# ---------------------------------------------------------------------------
+
+
+class TestWarnUndocumentedSources:
+    def test_undocumented_warning_in_text(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--warn-undocumented-sources",
+            ],
+        )
+        assert "WARNINGS" in result.output
+        assert "orders" in result.output
+
+    def test_undocumented_in_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--warn-undocumented-sources",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        assert len(parsed["undocumented_sources"]) >= 1
+
+
+# ---------------------------------------------------------------------------
+# GitHub format with sources/exposures
+# ---------------------------------------------------------------------------
+
+
+class TestGithubFormatSources:
+    def test_source_error_annotations(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--format", "github",
+            ],
+        )
+        assert "::error::" in result.output
+
+    def test_exposure_warning_annotations(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-exposures",
+                "--format", "github",
+            ],
+        )
+        assert "::warning::" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Full pipeline (all flags combined)
+# ---------------------------------------------------------------------------
+
+
+class TestFullPipeline:
+    def test_all_flags_json(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--include-exposures",
+                "--include-snapshots",
+                "--column-lineage",
+                "--warn-undocumented-sources",
+                "--format", "json",
+            ],
+        )
+        parsed = json.loads(result.output)
+        assert parsed["has_breaking_changes"] is True
+        assert parsed["summary"]["sources_changed"] >= 1
+        assert parsed["summary"]["exposures_impacted"] >= 1
+        assert isinstance(parsed["column_lineage_impact"], list)
+        assert isinstance(parsed["undocumented_sources"], list)
+
+    def test_all_flags_text(self, runner: CliRunner) -> None:
+        result = runner.invoke(
+            main,
+            [
+                "diff",
+                "--base", str(FULL_BASE),
+                "--current", str(FULL_CURRENT),
+                "--include-sources",
+                "--include-exposures",
+                "--include-snapshots",
+                "--column-lineage",
+                "--warn-undocumented-sources",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "BREAKING CHANGES" in result.output
+        assert "SOURCE CHANGES" in result.output
+        assert "EXPOSURE IMPACT" in result.output

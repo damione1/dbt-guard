@@ -23,7 +23,7 @@ def _make_model(
             for k, v in cols.items()
         },
         has_compiled_sql=compiled_sql is not None,
-        _compiled_sql=compiled_sql,
+        compiled_sql=compiled_sql,
     )
 
 

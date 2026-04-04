@@ -10,7 +10,7 @@ Supports three formats:
 from __future__ import annotations
 
 import json as json_module
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from .models import ColumnChange, DiffReport
 
@@ -80,7 +80,7 @@ def _format_text(report: DiffReport) -> str:
         for m in report.impacted_models:
             lines.append(f"  {m.model_name} (distance: {m.distance})")
 
-    # --- v0.2 sections (only when data exists) ---
+    # --- Optional sections (only when data exists) ---
 
     if report.source_changes:
         breaking_src = [c for c in report.source_changes if c.is_breaking]
@@ -337,7 +337,7 @@ def _format_github(report: DiffReport) -> str:
 
 def _group_by_model(
     changes: List[ColumnChange],
-) -> List[tuple]:
+) -> List[Tuple[str, List[ColumnChange]]]:
     """Return changes grouped by model_name, sorted alphabetically."""
     grouped: Dict[str, List[ColumnChange]] = {}
     for c in changes:

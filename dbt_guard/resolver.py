@@ -11,6 +11,7 @@ import logging
 from collections import deque
 from typing import Dict, List, Optional, Set, Tuple
 
+import sqlglot.expressions as exp
 import sqlglot.lineage as sg_lineage
 
 from .exceptions import ColumnLineageError
@@ -75,16 +76,18 @@ def resolve_column_lineage(
     # Track propagated changes: model_id -> set of affected output column names
     propagated: Dict[str, Set[str]] = dict(changed_columns)
 
+    # Pre-build schema dict and table name lookup once (O(n) total, not O(n*m))
+    schema = _build_schema_dict(all_models)
+    table_lookup = _build_table_lookup(all_models)
+
     while queue:
         model_id, depth = queue.popleft()
-        if depth > max_depth:
-            continue
 
         model = all_models.get(model_id)
         if model is None:
             continue
 
-        compiled_sql = model._compiled_sql
+        compiled_sql = model.compiled_sql
         if not compiled_sql:
             if strict:
                 raise ColumnLineageError(
@@ -111,15 +114,13 @@ def resolve_column_lineage(
                     parent_changes.update(propagated.get(parent_id, set()))
             if parent_changes:
                 propagated[model_id] = parent_changes
-            # Continue BFS for children
-            for child_id in child_map.get(model_id, []):
-                if child_id not in visited and child_id not in changed_set:
-                    visited.add(child_id)
-                    queue.append((child_id, depth + 1))
+            # Continue BFS for children (respect max_depth)
+            if depth < max_depth:
+                for child_id in child_map.get(model_id, []):
+                    if child_id not in visited and child_id not in changed_set:
+                        visited.add(child_id)
+                        queue.append((child_id, depth + 1))
             continue
-
-        # Build schema dict for sqlglot lineage
-        schema = _build_schema_dict(model_id, child_map, all_models)
 
         # Get output columns of this model
         dialect_arg = dialect or "default"
@@ -163,9 +164,7 @@ def resolve_column_lineage(
             # Check if any source ref matches a changed column
             for src_table, src_col in source_refs:
                 # Resolve src_table to a model_id
-                src_model_id = _resolve_table_to_model_id(
-                    src_table, all_models
-                )
+                src_model_id = table_lookup.get(src_table.lower())
                 if src_model_id and src_col in propagated.get(src_model_id, set()):
                     chain = [
                         ColumnLineageLink(
@@ -202,10 +201,11 @@ def resolve_column_lineage(
             )
             # Propagate affected output columns as changed for downstream BFS
             propagated[model_id] = affected_output_cols
-            for child_id in child_map.get(model_id, []):
-                if child_id not in visited and child_id not in changed_set:
-                    visited.add(child_id)
-                    queue.append((child_id, depth + 1))
+            if depth < max_depth:
+                for child_id in child_map.get(model_id, []):
+                    if child_id not in visited and child_id not in changed_set:
+                        visited.add(child_id)
+                        queue.append((child_id, depth + 1))
         else:
             # No output column traces to a changed column → cleared
             impacts.append(
@@ -223,15 +223,12 @@ def resolve_column_lineage(
 
 
 def _build_schema_dict(
-    model_id: str,
-    child_map: Dict[str, List[str]],
     all_models: Dict[str, ModelColumns],
 ) -> Dict[str, Dict[str, str]]:
     """Build a schema dict for sqlglot lineage tracing.
 
-    Maps table names to their column type definitions. Includes all models
-    that could be upstream of *model_id* (i.e., any model whose child_map
-    includes model_id).
+    Maps table names to their column type definitions for all models.
+    Built once and reused across the entire BFS traversal.
     """
     schema: Dict[str, Dict[str, str]] = {}
 
@@ -251,6 +248,24 @@ def _build_schema_dict(
             schema[f"{parts[-2]}.{parts[-1]}".lower()] = col_types
 
     return schema
+
+
+def _build_table_lookup(
+    all_models: Dict[str, ModelColumns],
+) -> Dict[str, str]:
+    """Build a lookup from table name (lowercase) to model unique_id.
+
+    Built once and reused across the entire BFS traversal, replacing
+    the O(n) linear scan in ``_resolve_table_to_model_id()``.
+    """
+    lookup: Dict[str, str] = {}
+    for mid, model in all_models.items():
+        lookup[model.model_name.lower()] = mid
+        # Also register schema-qualified patterns
+        parts = mid.split(".")
+        if len(parts) >= 3:
+            lookup[f"{parts[-2]}.{parts[-1]}".lower()] = mid
+    return lookup
 
 
 def _trace_column(
@@ -291,8 +306,6 @@ def _walk_lineage_node(
         name = node.name or ""
 
         # Resolve the actual table name from the expression (Table node)
-        import sqlglot.expressions as exp
-
         expr = node.expression
         table_name = ""
         if isinstance(expr, exp.Table):
@@ -317,17 +330,3 @@ def _walk_lineage_node(
         _walk_lineage_node(child, refs)
 
 
-def _resolve_table_to_model_id(
-    table_name: str,
-    all_models: Dict[str, ModelColumns],
-) -> Optional[str]:
-    """Resolve a table name (as it appears in SQL) to a model unique_id."""
-    lower = table_name.lower()
-    for mid, model in all_models.items():
-        if model.model_name.lower() == lower:
-            return mid
-        # Check schema.model_name pattern
-        parts = mid.split(".")
-        if len(parts) >= 3 and f"{parts[-2]}.{parts[-1]}".lower() == lower:
-            return mid
-    return None
